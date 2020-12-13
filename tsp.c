@@ -38,7 +38,7 @@ void draw_line(Map map, City a, City b);
 void draw_route(Map map, City *city, int n, const int *route);
 void plot_cities(FILE* fp, Map map, City *city, int n, const int *route);
 double distance(City a, City b);
-double solve(const City *city, int n, int *route, int *visited);
+double solve(const City *city, int n, int *route, int *visited, int visited_number);
 Map init_map(const int width, const int height);
 void free_map_dot(Map m);
 City *load_cities(const char* filename,int *n);
@@ -89,9 +89,9 @@ int main(int argc, char**argv)
     exit(1);
   }
   int n;
-  assert( n > 1 && n <= max_cities); // さすがに都市数100は厳しいので
 
   City *city = load_cities(argv[1],&n);
+  assert( n > 1 && n <= max_cities); // さすがに都市数100は厳しいので
 
   // 町の初期配置を表示
   plot_cities(fp, map, city, n, NULL);
@@ -176,7 +176,7 @@ double distance(City a, City b)
   return sqrt(dx * dx + dy * dy);
 }
 
-double solve(const City *city, int n, int *route, int *visited)
+double solve(const City *city, int n, int *route, int *visited, int visited_number)
 {
   // 以下はとりあえずダミー。ここに探索プログラムを実装する
   // 現状は町の番号順のルートを回っているだけ
