@@ -135,26 +135,36 @@ double load_double(const char *argvalue)
 int main (int argc, char**argv)
 {
   /* 引数処理: ユーザ入力が正しくない場合は使い方を標準エラーに表示して終了 */
-  if (argc != 3){
-    fprintf(stderr, "usage: %s <the number of items (int)> <max capacity (double)>\n",argv[0]);
+  if (argc != 3){ // main, filename, capacity
+    // fprintf(stderr, "usage: %s <the number of items (int)> <max capacity (double)>\n",argv[0]);
+    fprintf(stderr, "usage: %s <the filename which sets the itemset> <max capacity (double)>\n",argv[0]);
     exit(1);
   }
 
   // 個数の上限はあらかじめ定めておく
   const int max_items = 100;
 
-  const int n = load_int(argv[1]);
-  assert( n <= max_items ); // assert で止める
+  // const int n = load_int(argv[1]);
+  // assert( n <= max_items ); // assert で止める
+  char *filename = argv[1];
+  FILE *fp;
+  if ((fp = fopen(filename, "rb")) == NULL) {
+    perror(filename);
+    return EXIT_FAILURE;
+  }
+
+  Itemset *items = load_itemset(filename);
+  int n = items->number;
 
   const double W = load_double(argv[2]);
   assert( W >= 0.0);
 
-  printf("max capacity: W = %.f, # of items: %d\n",W, n);
+  printf("max capacity: W = %.f, # of items: %d\n", W, n);
 
   // 乱数シードを1にして、初期化 (ここは変更可能)
-  int seed = 1; 
-  Itemset *items = init_itemset(n, seed);
-  print_itemset(items);
+  // int seed = 1; 
+  // Itemset *items = init_itemset(n, seed);
+  // print_itemset(items);
 
   // ソルバーで解く
   Answer best_solution = solve(items, W);
@@ -185,6 +195,38 @@ Itemset *init_itemset(int number, int seed)
   }
   *list = (Itemset){.number = number, .item = item};
   return list;
+}
+
+Itemset *load_itemset(char *filename) {
+  FILE *fp = fopen(filename, "rb");
+  assert(fp != NULL);
+
+  Itemset *list = (Itemset*)malloc(sizeof(Itemset));
+
+  size_t rsize = fread(&(list->number), sizeof(int), 1, fp);
+  if (rsize != 1) {
+    fprintf(stderr, "%s is invalid file.\n", filename);
+    exit(1);
+  }; //ファイルの形式が誤っている
+
+  int number = list->number;
+  Item *item = (Item*)malloc(sizeof(Item) * number);
+
+  double val[number], wei[number];
+  size_t rsize_v = fread(val, sizeof(double), number, fp);
+  size_t rsize_w = fread(wei, sizeof(double), number, fp);
+
+  if (rsize_v != number || rsize_v != rsize_w) {
+    fprintf(stderr, "%s is invalid file.\n", filename);
+    exit(1);
+  }  
+  
+  for (int i = 0; i < number; i++) {
+    item[i].value = val[i];
+    item[i].weight = wei[i];
+  }
+  
+  *list = (Itemset){ .number = number, .item = item};
 }
 
 // itemset の free関数
