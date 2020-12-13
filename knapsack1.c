@@ -24,6 +24,11 @@ typedef struct itemset
   Item *item;
 } Itemset;
 
+typedef struct ans {
+  double value;
+  unsigned char *flags;
+} Answer;
+
 // 関数のプロトサイプ宣言
 
 // Itemset *init_itemset(int, int);
@@ -70,7 +75,7 @@ void save_itemset(char *filename);
 // 返り値:
 //   最適時の価値の総和を返す
 //
-double solve(const Itemset *list, double capacity);
+Answer solve(const Itemset *list, double capacity);
 
 // double search()
 //
@@ -84,7 +89,7 @@ double solve(const Itemset *list, double capacity);
 //  途中までの価値と重さ (ポインタではない点に注意): sum_v, sum_w
 // 返り値:
 //   最適時の価値の総和を返す
-double search(int index, const Itemset *list, double capacity, unsigned char *flags, double sum_v, double sum_w);
+Answer search(int index, const Itemset *list, double capacity, unsigned char *flags, double sum_v, double sum_w);
 
 // エラー判定付きの読み込み関数
 int load_int(const char *argvalue);
@@ -152,13 +157,17 @@ int main (int argc, char**argv)
   print_itemset(items);
 
   // ソルバーで解く
-  double total = solve(items, W);
+  Answer best_solution = solve(items, W);
 
   // 表示する
   printf("----\nbest solution:\n");
-  printf("value: %4.1f\n",total);
+  printf("itemset: ");
+  for (int i = 0; i < n; i++) printf("%d", best_solution.flags[i]);
+  printf("\n");
+  printf("value: %4.1f\n", best_solution.value);
 
   free_itemset(items);
+  free(best_solution.flags);
   return 0;
 }
 
@@ -197,46 +206,56 @@ void print_itemset(const Itemset *list)
 }
 
 // ソルバーは search を index = 0 で呼び出すだけ
-double solve(const Itemset *list,  double capacity)
+Answer solve(const Itemset *list,  double capacity)
 {
   // 品物を入れたかどうかを記録するフラグ配列 => !!最大の組み合わせが返ってくる訳ではない!!
   unsigned char *flags = (unsigned char*)calloc(list->number, sizeof(unsigned char));
-  double max_value = search(0,list,capacity,flags, 0.0, 0.0);
+  Answer max_value = search(0,list,capacity,flags, 0.0, 0.0);
   free(flags);
   return max_value;
 }
 
 // 再帰的な探索関数
-double search(int index, const Itemset *list, double capacity, unsigned char *flags, double sum_v, double sum_w)
+Answer search(int index, const Itemset *list, double capacity, unsigned char *flags, double sum_v, double sum_w)
 {
   int max_index = list->number;
   assert(index >= 0 && sum_v >= 0 && sum_w >= 0);
-  // 必ず再帰の停止条件を明記する (最初が望ましい)
+
   if (index == max_index){
     const char *format_ok = ", total_value = %5.1f, total_weight = %5.1f\n";
     const char *format_ng = ", total_value = %5.1f, total_weight = %5.1f NG\n";
     for (int i = 0 ; i < max_index ; i++){
       printf("%d", flags[i]);
     }
-    if (sum_w < capacity){
+    if (sum_w <= capacity){
       printf(format_ok, sum_v, sum_w);
-      return sum_v;
-    } else{
+      unsigned char *tmp_flags = (unsigned char*)malloc(sizeof(unsigned char) * list->number);
+      memcpy(tmp_flags, flags, sizeof(unsigned char) * list->number);
+      return (Answer){ .value = sum_v, flags = tmp_flags};
+    } 
+    else{
       printf(format_ng, sum_v, sum_w);
-      return 0;
+      return (Answer){ .value = 0, flags = NULL};
     }
   }
 
   // 以下は再帰の更新式: 現在のindex の品物を使う or 使わないで分岐し、index をインクリメントして再帰的にsearch() を実行する
-  double v0 = 0, v1 = 0;
   flags[index] = 0;
-  v0 = search(index+1, list, capacity, flags, sum_v, sum_w);
-
-  if (sum_w + list->item[index].weight <= capacity) {
-    flags[index] = 1;
-    v1 = search(index+1, list, capacity, flags, sum_v + list->item[index].value, sum_w + list->item[index].weight);
-  }
+  Answer a0 = search(index+1, list, capacity, flags, sum_v, sum_w);
   
+  flags[index] = 1;
+  Answer a1 = (Answer){ .value = 0, .flags = NULL};
+  if (sum_w + list->item[index].weight <= capacity) {
+    a1 = search(index+1, list, capacity, flags, sum_v+list->item[index].value, sum_w+list->item[index].weight);
+  }
   // 使った場合の結果と使わなかった場合の結果を比較して返す
-  return (v0 > v1) ? v0 : v1;
+
+  if (a0.value > a1.value) {
+    free(a1.flags);
+    return a0;
+  }
+  else {
+    free(a0.flags);
+    return a1;
+  }
 }
