@@ -128,7 +128,7 @@ int main(int argc, char**argv)
 
   Answer ans = (Answer){ .dist = INF, .route = route};
   Answer tmp;
-  for (int i = 0; i < 10; i++) {// とりあえず初期解5個
+  for (int i = 0; i < 1e4; i++) {// とりあえず初期解5個
     tmp = solve(city, n);
     if (ans.dist > tmp.dist) {
       ans.dist = tmp.dist;
@@ -137,7 +137,6 @@ int main(int argc, char**argv)
     free(tmp.route);
   }
   
-  // const Answer d = solve(city,n,route,visited, 0);
   // plot_cities(fp, map, city, n, ans.route);
   printf("total distance = %f\n", ans.dist);
   for (int i = 0 ; i < n ; i++){
@@ -256,20 +255,20 @@ Answer yamanobori(const City *city, int *route, int n) {
   // ハミング距離2のルートの距離を計算し、短いものがあれば更新する
   for (int i = 1; i < n-1; i++) {
     for (int j = i+1; j < n; j++) {
-      // swap(&hamming2_route[i], &hamming2_route[j]);
-      int now = hamming2_route[i];
-      hamming2_route[i] = hamming2_route[j];
-      hamming2_route[j] = now;
+      swap(&hamming2_route[i], &hamming2_route[j]);
+      // int now = hamming2_route[i];
+      // hamming2_route[i] = hamming2_route[j];
+      // hamming2_route[j] = now;
       
       double tmp = total_distance(city, hamming2_route, n);
       if (origin.dist > tmp) {
         origin.dist = tmp;
         memcpy(origin.route, hamming2_route, sizeof(int) * n);
       }
-      // swap(&hamming2_route[i], &hamming2_route[j]);
-      now = hamming2_route[i];
-      hamming2_route[i] = hamming2_route[j];
-      hamming2_route[j] = now;
+      swap(&hamming2_route[i], &hamming2_route[j]);
+      // now = hamming2_route[i];
+      // hamming2_route[i] = hamming2_route[j];
+      // hamming2_route[j] = now;
     }
   }
   return origin;
@@ -280,23 +279,12 @@ Answer solve(const City *city, int n) { //山登り法としてはsolveだが、
   int *route = (int*)calloc(n, sizeof(int)); //137行目でfreeしている
   
   gen_random_permutation(route, n); //初期解をセット
-  for (int i = 0; i < n; i++) {
-    printf("%d ", route[i]);
-  }
-  printf("\n");
-  
   double origin_distance = total_distance(city, route, n);
-
   
-  // for (int i = 0; i < n; i++) {
-  //   printf("%d ", route[i]);
-  // }
-  // printf("\n");
-
   Answer ans = (Answer){ .dist = INF, .route = NULL};
   while (1) {
     ans = yamanobori(city, route, n);
-    
+    memcpy(route, ans.route, sizeof(int) * n);
     if (ans.dist == origin_distance) {
       return ans;  //解が更新されなくなったら終了
     } 
@@ -305,7 +293,7 @@ Answer solve(const City *city, int n) { //山登り法としてはsolveだが、
       free(ans.route);
     }
   }
-  printf("solve done\n");
+
   return ans; 
 }
 
