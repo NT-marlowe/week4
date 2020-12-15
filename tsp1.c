@@ -99,7 +99,7 @@ City *load_cities(const char *filename, int *n)
 int main(int argc, char**argv)
 {
   srand(time(NULL));
-  
+  long num_initial_solution = 100;
   
   // const による定数定義
   const int width = 70;
@@ -109,7 +109,7 @@ int main(int argc, char**argv)
   Map map = init_map(width, height);
   
   FILE *fp = stdout; // とりあえず描画先は標準出力としておく
-  if (argc != 2){
+  if (argc != 2 && argc != 3){
     fprintf(stderr, "Usage: %s <city file>\n", argv[0]);
     exit(1);
   }
@@ -117,6 +117,19 @@ int main(int argc, char**argv)
 
   City *city = load_cities(argv[1],&n);
   assert( n > 1 && n <= max_cities); // さすがに都市数100は厳しいので
+
+  if (argc == 3) {
+    char *e;
+    errno = 0;
+    num_initial_solution = strtol(argv[2], &e, 10);
+    if (errno == ERANGE) {
+      fprintf(stderr, "%s: %s\n", argv[2], strerror(errno));
+      exit(1);
+    } 
+    else if (*e != '\0') {
+      fprintf(stderr, "irregular character %s found in %s\n", e, argv[2]);
+    }
+  }
   // 町の初期配置を表示
   // plot_cities(fp, map, city, n, NULL);
   sleep(1);
@@ -128,7 +141,7 @@ int main(int argc, char**argv)
 
   Answer ans = (Answer){ .dist = INF, .route = route};
   Answer tmp;
-  for (int i = 0; i < 1e4; i++) {// とりあえず初期解5個
+  for (int i = 0; i < num_initial_solution; i++) {// とりあえず初期解5個
     tmp = solve(city, n);
     if (ans.dist > tmp.dist) {
       ans.dist = tmp.dist;
@@ -137,6 +150,11 @@ int main(int argc, char**argv)
     free(tmp.route);
   }
   
+  if (ans.dist == INF) {
+    printf("Failed to solve the problem\n");
+    return EXIT_FAILURE;
+  }
+
   // plot_cities(fp, map, city, n, ans.route);
   printf("total distance = %f\n", ans.dist);
   for (int i = 0 ; i < n ; i++){
