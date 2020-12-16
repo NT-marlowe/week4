@@ -27,7 +27,9 @@ void print_itemset(const Itemset *list);
 
 void save_itemset(char *filename);
 
-void solve(const Itemset *list, int n, int capacity, double **dp);
+void solve(const Itemset *list, int n, int capacity, double **dp, int **a);
+
+void search_flags(int idx, int weight, const Itemset *list, int **a, int *flags);
 
 // エラー判定付きの読み込み関数
 int load_int(const char *argvalue);
@@ -97,23 +99,34 @@ int main(int argc, char **argv) {
 
   double **dp = (double**)calloc(n+10, sizeof(double*)); //　itemnum * maxweight
   double *tmp = (double*)calloc((n+10)*(capacity+10), sizeof(double)); //　少し余裕をもたせる
+  int **a = (int**)calloc(n+10, sizeof(int*));
+  int *tmp_a = (int*)calloc((n+10)*(capacity+10), sizeof(int));
+  
   for (int i = 0; i < n+10; i++) {
     dp[i] = tmp + i * (capacity+10);
+    a[i] = tmp_a + i * (capacity+10);
   }
   
-  solve(list, n, capacity, dp);
+  int flags[n]; // 容量が小さいのでmallocしなくてよい
+  solve(list, n, capacity, dp, a);
+  search_flags(n, capacity, list, a, flags);
 
   for (int i = 0; i < n; i++) {
     printf("%.1f %.1f\n", list->item[i].value, list->item[i].weight);
   }
 
   printf("----\nbest solution:\n");
-
+  for (int i = 0; i < n; i++) {
+    printf("%d", flags[i]);
+  }
+  printf("\n");
   printf("value: %4.1f\n", dp[n][capacity]);
 
   free_itemset(list);
   free(tmp);
   free(dp);
+  free(tmp_a);
+  free(a);
 
   return 0;
 }
@@ -157,7 +170,7 @@ void free_itemset(Itemset *list)
   free(list);
 }
 
-void solve(const Itemset *list, int n, int capacity, double **dp) {
+void solve(const Itemset *list, int n, int capacity, double **dp, int **a) {
   
   double v[n];
   int w[n];
@@ -175,11 +188,33 @@ void solve(const Itemset *list, int n, int capacity, double **dp) {
   for (int i = 0; i < n; i++) {
     for (int j = 0; j <= capacity; j++) {
       if (w[i] <= j) {
-        dp[i+1][j] = max(dp[i][j], dp[i][j-w[i]] + v[i]);
+        // dp[i+1][j] = max(dp[i][j], dp[i][j-w[i]] + v[i]);
+        if (dp[i][j] < dp[i][j-w[i]] + v[i]) {
+          dp[i+1][j] = dp[i][j-w[i]] + v[i];
+          a[i+1][j] = 1; // i番目のitemを採用した
+        }
+        else {
+          dp[i+1][j] = dp[i][j];
+          a[i+1][j] = 0; // 採用しなかった
+        }
       } 
       else {
         dp[i+1][j] = dp[i][j];
+        a[i+1][j] = 0;
       }
     }
   }
 }
+
+void search_flags(int idx, int weight, const Itemset *list, int **a, int *flags) {
+  if (idx == 0) {return;}
+  
+  flags[idx-1] = a[idx][weight]; 
+  // printf("%d ", weight);
+  if (a[idx][weight]) {
+    search_flags(idx-1, (int)(weight-list->item[idx-1].weight*10), list, a, flags);
+  }
+  else {
+    search_flags(idx-1, weight, list, a, flags);
+  }
+} 
