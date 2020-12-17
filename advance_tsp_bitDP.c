@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <errno.h> // strtol のエラー判定用
+#define INF 1e9
 
 // 町の構造体（今回は2次元座標）を定義
 typedef struct
@@ -32,7 +33,7 @@ int max(const int a, const int b)
   return (a > b) ? a : b;
 }
 
-int min(const int a, const int b) {
+double min(const double a, const double b) {
   return (a < b) ? a : b;
 }
 
@@ -47,7 +48,8 @@ void draw_line(Map map, City a, City b);
 void draw_route(Map map, City *city, int n, const int *route);
 void plot_cities(FILE* fp, Map map, City *city, int n, const int *route);
 double distance(City a, City b);
-Answer solve(const City *city, int n, int *route, int *visited, int visited_number);
+double solve(int n, double **dp, int **next_city, int bit, int v, double dist_table[n][n]);
+void search_route(int n, int *route, int **next_city, int v, int bit, int idx);
 Map init_map(const int width, const int height);
 void free_map_dot(Map m);
 City *load_cities(const char* filename,int *n);
@@ -88,7 +90,7 @@ int main(int argc, char**argv)
   // const による定数定義
   const int width = 70;
   const int height = 40;
-  const int max_cities = 100;
+  const int max_cities = 20; // 100から20に変更
 
   Map map = init_map(width, height);
   
@@ -101,7 +103,14 @@ int main(int argc, char**argv)
 
   City *city = load_cities(argv[1],&n);
   assert( n > 1 && n <= max_cities); // さすがに都市数100は厳しいので
-
+  
+  double dist_table[n][n];
+  for (int i = 0; i < n; i++) {
+    for (int j = 0; j < n; j++) {
+      dist_table[i][j] = distance(city[i], city[j]); // bitDPのために距離のテーブルをセット
+    } 
+  }
+  
   // 町の初期配置を表示
   plot_cities(fp, map, city, n, NULL);
   sleep(1);
@@ -109,9 +118,26 @@ int main(int argc, char**argv)
   // 訪れる順序を記録する配列を設定
   int *route = (int*)calloc(n, sizeof(int));
   // 訪れた町を記録するフラグ
-  int *visited = (int*)calloc(n, sizeof(int));
+  // int *visited = (int*)calloc(n, sizeof(int));
 
-  const Answer d = solve(city,n,route,visited, 0);
+  double **dp = (double**)calloc((1<<n)+1, sizeof(double*)); // {(1<<n) + 1} * (n+1)の二次元配列
+  double *tmp = (double*)calloc((1<<n + 1) * (n + 1) , sizeof(double));
+  
+  int **next_city = (int**)calloc((1<<n)+1, sizeof(int*));
+  int *tmp_city = (int*)calloc((1<<n + 1) * (n + 1), sizeof(int));
+  
+  for (int i = 0; i < (1<<n)+1; i++) {
+    dp[i] = tmp + (n+1) * i;
+    next_city[i] = tmp_city + (n+1) * i;
+  }
+  
+  for (int i = 0; i < (1<<n); i++) {
+    for (int j = 0; j < n; j++) dp[i][j] = -1; // 未探索のフラグ
+  }
+
+  double d = solve(n, dp, next_city, 0, 0, dist_table);
+  search_route(n, route, next_city, 0, 0, 0);
+  
   plot_cities(fp, map, city, n, route);
   printf("total distance = %f\n", d);
   for (int i = 0 ; i < n ; i++){
@@ -121,9 +147,14 @@ int main(int argc, char**argv)
 
   // 動的確保した環境ではfreeをする
   free(route);
-  free(visited);
+  // free(visited);
   free(city);
-  
+
+  free(tmp);
+  free(dp);
+
+  free(tmp_city);
+  free(next_city);
   return 0;
 }
 
@@ -185,34 +216,39 @@ double distance(City a, City b)
   return sqrt(dx * dx + dy * dy);
 }
 
-Answer solve(const City *city, int n, int *route, int *visited, int visited_number)
+double solve(int n, double **dp, int **next_city, int bit, int v, double dist_table[n][n])
 {
-  // 以下はとりあえずダミー。ここに探索プログラムを実装する
-  // 現状は町の番号順のルートを回っているだけ
-  // 実際は再帰的に探索して、組み合わせが膨大になる。
-  route[0] = 0; // 循環した結果を避けるため、常に0番目からスタート
-  visited[0] = 1;
-  
-  if (visited_number == n) {
-    double sum_d = 0;
-    for (int i = 0 ; i < n ; i++){
-      const int c0 = route[i];
-      const int c1 = route[(i+1)%n]; // nは0に戻る
-      sum_d += distance(city[c0],city[c1]);
-    }
-    int *arg = (int*)malloc(sizeof(int) * n);
-    memcpy(arg, route, sizeof(int) * n);
-    return (Answer){ .dist = sum_d, .route = arg};
-  }
+  if (dp[bit][v] >= 0) return dp[bit][v];
 
+  if (bit == (1<<n)-1 && v == 0) return dp[bit][v] = 0;
+
+  // int prev_bit = bit & ~(1<<v);
+
+  double ret = INF;
+
+  for (int u = 0; u < n; u++) {
+    if (!(bit >> u & 1)) {
+      // 次の頂点はu
+      int next = bit | (1 << u);
+      double now = solve(n, dp, next_city, next, u, dist_table) + dist_table[u][v];
+      // ret = min(ret, now);
+      if (ret > now) {
+        ret = now;
+        next_city[bit][v] = u;
+      }
+    }
+  }
+  return dp[bit][v] = ret;
+ 
+}
+
+void search_route(int n, int *route, int **next_city, int v, int bit, int idx) {
   
-  // トータルの巡回距離を計算する
-  // 実際には再帰の末尾で計算することになる
-  /*double sum_d = 0;
-  for (int i = 0 ; i < n ; i++){
-    const int c0 = route[i];
-    const int c1 = route[(i+1)%n]; // nは0に戻る
-    sum_d += distance(city[c0],city[c1]);
-  }*/
-  // return sum_d;
+  if (idx == n-1) return;
+
+  route[idx+1] = next_city[bit][v];
+  int nv = route[idx+1];
+  int next_bit = bit | (1 << nv);
+  printf("%d ", nv);
+  search_route(n, route, next_city, nv, next_bit, idx+1);
 }
